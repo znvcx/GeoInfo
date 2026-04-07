@@ -11,8 +11,11 @@
     <meta name="theme-color" content="#3b82f6">
     <link rel="apple-touch-icon" href="assets/img/icon-192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>GeoInfo Vaud</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/img/icon-192.png">
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -125,6 +128,9 @@
                         <span class="label">Police</span>
                         <strong id="info-police">-</strong>
                     </div>
+                    <button class="btn-boundary" data-type="police" title="Afficher les limites">
+                        <span class="material-symbols-outlined">map</span>
+                    </button>
                 </div>
                 <div class="info-card" id="card-lieudit">
                     <span class="material-symbols-outlined icon">landscape</span>

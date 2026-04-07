@@ -82,6 +82,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let searchMarker = null;
     let activeBoundaryLayer = null;
 
+    // Nominatim headers per usage policy (User-Agent required)
+    const NOMINATIM_HEADERS = {
+        'Accept-Language': 'fr-CH, fr',
+        'User-Agent': 'GeoInfo/1.0 (https://github.com/znvcx/GeoInfo)'
+    };
+
+    // Simple in-memory cache for reverse geocode results
+    const geocodeCache = new Map();
+
     // Functions
     function wgs84ToLV95(lat, lng) {
         // Precise conversion using Swisstopo formula
@@ -140,14 +149,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Nominatim API (Zoom 18 for street level + extratags for RC numbers)
-            const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&addressdetails=1&countrycodes=ch&zoom=18&extratags=1`;
+            const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(6)}&lon=${lng.toFixed(6)}&format=jsonv2&addressdetails=1&countrycodes=ch&zoom=18&extratags=1`;
 
-            const response = await fetch(url, {
-                headers: {
-                    'Accept-Language': 'fr-CH, fr'
+            // Check cache first (rounded to ~11m grid)
+            const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+            let data;
+            if (geocodeCache.has(cacheKey)) {
+                data = geocodeCache.get(cacheKey);
+            } else {
+                const response = await fetch(url, { headers: NOMINATIM_HEADERS });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                data = await response.json();
+                geocodeCache.set(cacheKey, data);
+                // Limit cache size to 50 entries
+                if (geocodeCache.size > 50) {
+                    geocodeCache.delete(geocodeCache.keys().next().value);
                 }
-            });
-            const data = await response.json();
+            }
 
             if (data && !data.error && data.address) {
                 const addr = data.address;
@@ -170,7 +188,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 locationSubtitle.textContent = canton === 'Vaud' ? 'Canton de Vaud, Suisse' : `${canton}, Suisse`;
 
                 infoCommune.textContent = commune;
-                const cleanDistrict = district.replace('District de ', '').replace('District d\'', '').trim();
+                // Normalize district name - Nominatim can return "District de X" or "District d'X" etc.
+                const cleanDistrict = district
+                    .replace(/^District\s+d[eu]'?\s*/i, '')
+                    .replace(/^District\s+de\s+l[ae]?'?\s*/i, '')
+                    .replace(/^District\s+des?\s+/i, '')
+                    .trim();
                 infoDistrict.textContent = cleanDistrict;
                 infoCanton.textContent = canton;
 
@@ -223,18 +246,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (canton === 'Vaud' && cardJustice) {
                     cardJustice.style.display = 'flex';
 
-                    const queryText = (commune + " " + cleanDistrict + " " + (addr.county || '') + " " + (addr.state_district || '') + " " + (addr.city || '')).toLowerCase();
+                    // Official mapping: Vaud has 4 MP arrondissements defined by district
+                    // Source: https://www.vd.ch/justice
+                    const DISTRICT_TO_MP = {
+                        // MP de l'Est vaudois
+                        'Aigle':                    "MP de l'Est vaudois",
+                        'Riviera-Pays-d\'Enhaut':   "MP de l'Est vaudois",
+                        'Lavaux-Oron':              "MP de l'Est vaudois",
+                        // MP du Nord vaudois
+                        'Jura-Nord vaudois':        "MP du Nord vaudois",
+                        'Broye-Vully':              "MP du Nord vaudois",
+                        'Gros-de-Vaud':             "MP du Nord vaudois",
+                        // MP de La Côte
+                        'Nyon':                     "MP de La Côte",
+                        'Morges':                   "MP de La Côte",
+                        // MP de Lausanne
+                        'Lausanne':                 "MP de Lausanne",
+                        'Ouest lausannois':         "MP de Lausanne",
+                    };
 
-                    if (queryText.includes("aigle") || queryText.includes("lavaux") || queryText.includes("oron") || queryText.includes("riviera") || queryText.includes("enhaut")) {
-                        infoJustice.textContent = "MP de l'Est vaudois";
-                    } else if (queryText.includes("broye") || queryText.includes("vully") || queryText.includes("gros-de-vaud") || queryText.includes("jura") || queryText.includes("yverdon")) {
-                        infoJustice.textContent = "MP du Nord vaudois";
-                    } else if (queryText.includes("morges") || queryText.includes("nyon") || queryText.includes("rolle")) {
-                        infoJustice.textContent = "MP de La Côte";
-                    } else if (queryText.includes("lausanne") || queryText.includes("ouest") || queryText.includes("renens") || queryText.includes("prilly")) {
-                        infoJustice.textContent = "MP de Lausanne";
+                    // Try exact match first, then partial match
+                    const mpExact = DISTRICT_TO_MP[cleanDistrict];
+                    if (mpExact) {
+                        infoJustice.textContent = mpExact;
                     } else {
-                        infoJustice.textContent = "Non déterminé (" + cleanDistrict + ")";
+                        // Partial match for edge cases
+                        const mpPartial = Object.entries(DISTRICT_TO_MP).find(([k]) =>
+                            cleanDistrict.toLowerCase().includes(k.toLowerCase()) ||
+                            k.toLowerCase().includes(cleanDistrict.toLowerCase())
+                        );
+                        infoJustice.textContent = mpPartial ? mpPartial[1] : `Non déterminé (${cleanDistrict})`;
                     }
                 } else if (cardJustice) {
                     cardJustice.style.display = 'none';
@@ -287,8 +328,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error(error);
-            locationTitle.textContent = "Erreur";
-            locationSubtitle.textContent = "Impossible de récupérer les informations.";
+            // Handle rate limiting specifically
+            if (error.message && error.message.includes('429')) {
+                locationTitle.textContent = "Service surchargé";
+                locationSubtitle.textContent = "L'API est temporairement indisponible.";
+                showToast("⏳ Trop de requêtes — patientez quelques secondes.", 5000);
+                // Auto-retry after 5 seconds
+                setTimeout(() => {
+                    if (dataEnabled) reverseGeocode(lat, lng);
+                }, 5000);
+            } else {
+                locationTitle.textContent = "Erreur";
+                locationSubtitle.textContent = "Impossible de récupérer les informations.";
+                showToast("Erreur de connexion. Vérifiez votre réseau.", 3000);
+            }
         } finally {
             const textElements = [infoCommune, infoDistrict, infoCanton, infoAddress, infoLieudit];
             if (infoJustice) textElements.push(infoJustice);
@@ -315,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const center = map.getCenter();
                 reverseGeocode(center.lat, center.lng);
             }
-        }, 1000); // 1s debounce
+        }, 2000); // 2s debounce — avoids Nominatim rate limiting
     });
 
     // Locating User
@@ -361,7 +414,91 @@ document.addEventListener('DOMContentLoaded', () => {
         reverseGeocode(map.getCenter().lat, map.getCenter().lng);
     });
 
+    // Data maps for multi-commune boundary display
+    const POLICE_COMMUNES = {
+        "Police de Lausanne": ["Lausanne"],
+        "Police Ouest Lausannois (POL)": ["Bussigny", "Chavannes-près-Renens", "Crissier", "Ecublens", "Prilly", "Renens", "Saint-Sulpice", "Villars-Sainte-Croix"],
+        "Police Région Morges (PRM)": ["Morges", "Buchillon", "Lussy-sur-Morges", "Préverenges", "Saint-Prex", "Tolochenaz"],
+        "Police Nyon Région (PNR)": ["Nyon", "Prangins", "Crans-près-Céligny"],
+        "Police Nord Vaudois (PNV)": ["Yverdon-les-Bains", "Chamblon", "Cheseaux-Noréaz", "Grandson", "Montagny", "Cuarny", "Treycovagnes", "Pomy"],
+        "Police Riviera (ASR)": ["Montreux", "Vevey", "La Tour-de-Peilz", "Blonay", "Saint-Légier-La-Chiésaz", "Chardonne", "Corseaux", "Corsier-sur-Vevey", "Jongny", "Veytaux"],
+        "Police du Chablais vaudois (EPOC)": ["Aigle", "Bex", "Ollon"],
+        "Police Est Lausannois (PEL)": ["Pully", "Paudex", "Belmont-sur-Lausanne", "Savigny"],
+        "Police Lavaux (APOL)": ["Bourg-en-Lavaux", "Chexbres", "Lutry", "Puidoux", "Rivaz", "Saint-Saphorin"]
+    };
+
+    const JUSTICE_COMMUNES = {
+        "MP de l'Est vaudois": ["Aigle", "Bex", "Ollon", "Montreux", "Vevey", "La Tour-de-Peilz", "Blonay", "Riviera-Pays-d'Enhaut", "Bourg-en-Lavaux", "Lutry", "Puidoux", "Chexbres", "Oron"],
+        "MP du Nord vaudois": ["Yverdon-les-Bains", "Grandson", "Payerne", "Moudon", "Échallens", "Avenches", "Valbroye"],
+        "MP de La Côte": ["Nyon", "Morges", "Rolle", "Aubonne", "Prangins", "Gland"],
+        "MP de Lausanne": ["Lausanne", "Renens", "Prilly", "Bussigny", "Crissier", "Ecublens"]
+    };
+
     // Polygon Borders
+    async function fetchCommuneBoundary(communeName) {
+        try {
+            let url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(communeName)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+            let resp = await fetch(url, { headers: NOMINATIM_HEADERS });
+            let data = await resp.json();
+            if (data && data.length > 0 && data[0].geojson && data[0].geojson.type !== 'Point') {
+                return data[0].geojson;
+            }
+            // Fallback: generic search
+            url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(communeName + ', Vaud, Switzerland')}&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+            resp = await fetch(url, { headers: NOMINATIM_HEADERS });
+            data = await resp.json();
+            if (data && data.length > 0 && data[0].geojson && data[0].geojson.type !== 'Point') {
+                return data[0].geojson;
+            }
+        } catch (e) {
+            console.warn(`Limite non trouvée pour: ${communeName}`, e);
+        }
+        return null;
+    }
+
+    async function loadMultiBoundary(type, communes, color) {
+        if (activeBoundaryLayer) {
+            map.removeLayer(activeBoundaryLayer);
+            activeBoundaryLayer = null;
+        }
+        showToast(`Chargement de ${communes.length} communes...`);
+
+        // Sequential fetch with delay to respect Nominatim rate limit (1 req/s)
+        const validGeoJSONs = [];
+        for (const communeName of communes) {
+            const geojson = await fetchCommuneBoundary(communeName);
+            if (geojson) validGeoJSONs.push(geojson);
+            await new Promise(resolve => setTimeout(resolve, 300)); // 300ms between requests
+        }
+
+        if (validGeoJSONs.length === 0) {
+            showToast("Aucune limite trouvée.");
+            return;
+        }
+
+        // Combine into a FeatureCollection
+        const featureCollection = {
+            type: "FeatureCollection",
+            features: validGeoJSONs.map(geojson => ({
+                type: "Feature",
+                geometry: geojson,
+                properties: {}
+            }))
+        };
+
+        activeBoundaryLayer = L.geoJSON(featureCollection, {
+            style: {
+                color: color,
+                weight: 2.5,
+                opacity: 0.85,
+                fillOpacity: 0.12
+            },
+            interactive: false
+        }).addTo(map);
+
+        showToast(`${validGeoJSONs.length} / ${communes.length} limites affichées.`);
+    }
+
     async function loadBoundary(type, name, elementToLoadFrom) {
         if (activeBoundaryLayer) {
             map.removeLayer(activeBoundaryLayer);
@@ -440,12 +577,33 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation(); // Avoid triggering copy
             const type = btn.getAttribute('data-type');
 
-            // Get text content
-            let targetId = `info-${type}`;
-            const el = document.getElementById(targetId);
-            if (el && !el.classList.contains('skeleton')) {
-                const name = el.textContent.trim();
-                loadBoundary(type, name, btn);
+            if (type === 'justice') {
+                // Find matching MP key by reading current value from DOM
+                const infoEl = document.getElementById('info-justice');
+                const name = infoEl ? infoEl.textContent.trim() : '';
+                const mpKey = Object.keys(JUSTICE_COMMUNES).find(k => name.includes(k) || k.includes(name));
+                if (mpKey) {
+                    loadMultiBoundary(type, JUSTICE_COMMUNES[mpKey], '#8b5cf6');
+                } else {
+                    showToast("Territoire MP non reconnu.");
+                }
+            } else if (type === 'police') {
+                // Find matching Police key by reading current value from DOM
+                const infoEl = document.getElementById('info-police');
+                const name = infoEl ? infoEl.textContent.trim() : '';
+                const policeKey = Object.keys(POLICE_COMMUNES).find(k => name.includes(k) || k.includes(name));
+                if (policeKey) {
+                    loadMultiBoundary(type, POLICE_COMMUNES[policeKey], '#ec4899');
+                } else {
+                    showToast("Corps de police non reconnu.");
+                }
+            } else {
+                // commune, district, canton
+                const targetEl = document.getElementById(`info-${type}`);
+                if (targetEl && !targetEl.classList.contains('skeleton')) {
+                    const name = targetEl.textContent.trim();
+                    loadBoundary(type, name, btn);
+                }
             }
         });
     });
@@ -835,11 +993,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Toast & Copy Feature
     const toast = document.getElementById('toast');
-    function showToast(message) {
+    function showToast(message, duration = 2000) {
         if (!toast) return;
         toast.textContent = message;
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2000);
+        setTimeout(() => toast.classList.remove('show'), duration);
     }
 
     document.querySelectorAll('.info-card').forEach(card => {
