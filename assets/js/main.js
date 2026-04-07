@@ -79,18 +79,29 @@ document.addEventListener('DOMContentLoaded', () => {
     let dataEnabled = true;
     let sheetState = 'expanded';
     let userMarker = null;
-    let vaudLayer = null;
-    let communeLayer = null;
+    let searchMarker = null;
+    let activeBoundaryLayer = null;
 
     // Functions
     function wgs84ToLV95(lat, lng) {
-        const latSec = lat * 3600;
-        const lngSec = lng * 3600;
-        const latAux = (latSec - 169028.66) / 10000;
-        const lngAux = (lngSec - 26782.5) / 10000;
-        const e = 2600072.37 + 211455.93 * lngAux - 10938.51 * lngAux * latAux - 0.36 * lngAux * Math.pow(latAux, 2) - 44.54 * Math.pow(lngAux, 3);
-        const n = 1200147.07 + 308807.95 * latAux + 3745.25 * Math.pow(lngAux, 2) + 76.63 * Math.pow(latAux, 2) - 194.56 * Math.pow(lngAux, 2) * latAux + 119.79 * Math.pow(latAux, 3);
-        return { e: Math.round(e), n: Math.round(n) };
+        // Precise conversion using Swisstopo formula
+        const phi_aux = (lat * 3600 - 169028.66) / 10000;
+        const lambda_aux = (lng * 3600 - 26782.5) / 10000;
+
+        const e = 2600072.37 
+                + 211455.93 * lambda_aux 
+                - 10938.51 * lambda_aux * phi_aux 
+                - 0.36 * lambda_aux * Math.pow(phi_aux, 2) 
+                - 44.54 * Math.pow(lambda_aux, 3);
+
+        const n = 1200147.07 
+                + 308807.95 * phi_aux 
+                + 3745.25 * Math.pow(lambda_aux, 2) 
+                + 76.63 * Math.pow(phi_aux, 2) 
+                - 194.56 * Math.pow(lambda_aux, 2) * phi_aux 
+                + 119.79 * Math.pow(phi_aux, 3);
+        
+        return { e: e, n: n };
     }
 
     async function reverseGeocode(lat, lng) {
@@ -98,8 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isFetching = true;
         
         const lv95 = wgs84ToLV95(lat, lng);
-        const wgsText = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        const chText = `${lv95.e}, ${lv95.n}`;
+        const wgsText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        const chText = `${Math.round(lv95.e)}, ${Math.round(lv95.n)}`;
         
         // Skeletons feedback
         const textElements = [infoCommune, infoDistrict, infoCanton, infoAddress, infoLieudit];
@@ -115,7 +126,9 @@ document.addEventListener('DOMContentLoaded', () => {
         locationTitle.textContent = "Recherche...";
         locationSubtitle.textContent = "Chargement des données...";
         
-        infoCoords.innerHTML = `${wgsText}<br><span style="font-size: 11px; color: var(--text-muted); font-weight: normal; margin-top: 2px; display: block;">${chText}</span>`;
+        // Coordonnées: CH (LV95) en grand, WGS en petit
+        infoCoords.innerHTML = `${chText}<br><span style="font-size: 11px; color: var(--text-muted); font-weight: normal; margin-top: 2px; display: block;">GPS (WGS84) : ${wgsText}</span>`;
+        
         if (cardJustice) cardJustice.style.display = 'none';
         if (cardPolice) cardPolice.style.display = 'none';
         
@@ -201,11 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lieuDit = addr.locality || addr.isolated_dwelling || addr.hamlet || addr.neighbourhood || addr.croft || addr.suburb || "Aucun lieu-dit identifié";
                 infoLieudit.textContent = lieuDit;
                 
-                // Tracé de la commune
-                if (canton === 'Vaud' || canton === 'Inconnu') {
-                    loadCommuneBoundary(commune);
-                } else {
-                    if (communeLayer) map.removeLayer(communeLayer);
+                // Effacer la surbrillance lors du changement de zone
+                if (activeBoundaryLayer) {
+                    map.removeLayer(activeBoundaryLayer);
+                    activeBoundaryLayer = null;
                 }
                 
                 if (canton === 'Vaud' && cardJustice) {
@@ -296,6 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
     map.on('moveend', () => {
         crosshair.classList.remove('is-dragging');
         clearTimeout(moveTimeout);
+        // If a search marker is active, don't overwrite the data with the map center
+        if (searchMarker) return;
         moveTimeout = setTimeout(() => {
             if (dataEnabled) {
                 const center = map.getCenter();
@@ -348,63 +362,93 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Polygon Borders
-    async function loadVaudBoundary() {
-        try {
-            const url = `https://nominatim.openstreetmap.org/search?q=Canton+de+Vaud,Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
-            const response = await fetch(url);
-            const data = await response.json();
-            if (data && data.length > 0 && data[0].geojson) {
-                vaudLayer = L.geoJSON(data[0].geojson, {
-                    style: {
-                        color: "#10b981", 
-                        weight: 2, 
-                        opacity: 0.8, 
-                        fillOpacity: 0.05, 
-                        dashArray: "5, 5"
-                    },
-                    interactive: false
-                }).addTo(map);
-            }
-        } catch (e) {
-            console.error("Erreur chargement frontière Vaud", e);
+    async function loadBoundary(type, name, elementToLoadFrom) {
+        if (activeBoundaryLayer) {
+            map.removeLayer(activeBoundaryLayer);
+            activeBoundaryLayer = null;
         }
-    }
-    
-    async function loadCommuneBoundary(communeName) {
-        if (communeLayer) {
-            map.removeLayer(communeLayer);
-            communeLayer = null;
+
+        if (!name || name === '-' || name.includes('Inconnu')) {
+            showToast("Nom invalide ou inconnu.");
+            return;
         }
-        if (!communeName || communeName === 'Inconnue' || communeName === '-') return;
 
         try {
-            const url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(communeName)}&state=Vaud&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+            let url = '';
+            showToast("Recherche des limites...");
+            
+            if (type === 'commune') {
+                url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(name)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+            } else if (type === 'district') {
+                // Pour sécuriser, on ajoute "District de " si manquant
+                let dName = name.toLowerCase().includes('district') ? name : `District de ${name}`;
+                url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(dName)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+            } else if (type === 'canton') {
+                let cName = name.toLowerCase().includes('canton') ? name : `Canton de ${name}`;
+                url = `https://nominatim.openstreetmap.org/search?state=${encodeURIComponent(cName)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+            } else {
+                // justice, police, lieudit
+                url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)},Switzerland&polygon_geojson=1&format=jsonv2&limit=1`;
+            }
+
             let response = await fetch(url);
             let data = await response.json();
-            
-            if (!data || data.length === 0 || !data[0].geojson) {
-                const url2 = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(communeName)},Canton+de+Vaud,Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+
+            // Fallback for commune if nothing found
+            if (type === 'commune' && (!data || data.length === 0 || !data[0].geojson)) {
+                const url2 = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
                 response = await fetch(url2);
                 data = await response.json();
             }
 
             if (data && data.length > 0 && data[0].geojson) {
-                communeLayer = L.geoJSON(data[0].geojson, {
+                const geojson = data[0].geojson;
+                if (geojson.type === "Point") {
+                     showToast("Seul un point a été trouvé, pas de limites.");
+                     return;
+                }
+                
+                let color = "#3b82f6";
+                if (type === 'canton') color = "#10b981";
+                if (type === 'district') color = "#f59e0b";
+                if (type === 'police' || type === 'justice') color = "#8b5cf6";
+
+                activeBoundaryLayer = L.geoJSON(geojson, {
                     style: {
-                        color: "#3b82f6", 
+                        color: color, 
                         weight: 3, 
                         opacity: 0.8, 
-                        fillOpacity: 0.1
+                        fillOpacity: 0.15
                     },
                     interactive: false
                 }).addTo(map);
+
+                // Fit bounds to polygon (removed to prevent map moving and limit vanishing)
+                // Keep data sheet open!
+            } else {
+                showToast("Limites non disponibles pour cet élément.");
             }
         } catch (e) {
-            console.error("Erreur chargement frontière Commune", e);
+            console.error("Erreur chargement frontière", e);
+            showToast("Erreur lors du chargement des limites.");
         }
     }
-    
-    loadVaudBoundary();
+
+    // Attach Boundary Events
+    document.querySelectorAll('.btn-boundary').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Avoid triggering copy
+            const type = btn.getAttribute('data-type');
+            
+            // Get text content
+            let targetId = `info-${type}`;
+            const el = document.getElementById(targetId);
+            if (el && !el.classList.contains('skeleton')) {
+               const name = el.textContent.trim();
+               loadBoundary(type, name, btn);
+            }
+        });
+    });
 
     // Initial load geocoding: locate user
     if (dataEnabled) {
@@ -459,6 +503,13 @@ document.addEventListener('DOMContentLoaded', () => {
             layersMenu.classList.add('hidden');
             modalAbout.classList.remove('hidden');
         });
+
+        const btnAboutMain = document.getElementById('btn-about-main');
+        if (btnAboutMain) {
+            btnAboutMain.addEventListener('click', () => {
+                modalAbout.classList.remove('hidden');
+            });
+        }
         
         btnCloseAbout.addEventListener('click', () => {
             modalAbout.classList.add('hidden');
@@ -543,9 +594,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let searchTimeout = null;
 
     if (searchInput) {
+        searchInput.addEventListener('focus', () => {
+            searchContainer.classList.add('searching');
+        });
+
+        searchInput.addEventListener('blur', () => {
+            // Delay to allow clicking on results
+            setTimeout(() => {
+                if (searchInput.value.trim() === "") {
+                    searchContainer.classList.remove('searching');
+                }
+            }, 200);
+        });
+
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.trim();
             if (query.length > 0) {
+                searchContainer.classList.add('searching');
                 btnClearSearch.classList.remove('hidden');
             } else {
                 btnClearSearch.classList.add('hidden');
@@ -555,16 +620,177 @@ document.addEventListener('DOMContentLoaded', () => {
 
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
-                performLocationSearch(query);
-            }, 400); // 400ms debounce
+                handleSearch(query);
+            }, 400); 
         });
 
         btnClearSearch.addEventListener('click', () => {
             searchInput.value = '';
             btnClearSearch.classList.add('hidden');
             searchResultsDiv.classList.add('hidden');
+            searchContainer.classList.remove('searching');
+            // Remove search marker when search is cleared
+            if (searchMarker) {
+                map.removeLayer(searchMarker);
+                searchMarker = null;
+            }
             searchInput.focus();
+            // Reload data for current map center
+            if (dataEnabled) {
+                const center = map.getCenter();
+                reverseGeocode(center.lat, center.lng);
+            }
         });
+    }
+
+    function lv95ToWGS84(e, n) {
+        // Start with polynomial approximation as initial guess
+        const y_p = (e - 2600000) / 1000000;
+        const x_p = (n - 1200000) / 1000000;
+        let lat = (16.9023892 + 3.230773*x_p - 0.270978*y_p*y_p 
+                   - 0.002528*x_p*x_p - 0.0447*y_p*y_p*x_p - 0.0140*x_p*x_p*x_p) * 100/36;
+        let lng = (2.6779094 + 4.728982*y_p + 0.791484*y_p*x_p 
+                   + 0.1306*y_p*x_p*x_p - 0.0436*y_p*y_p*y_p) * 100/36;
+
+        // Iterative Newton refinement: correct until round-trip error < 0.01m
+        // Jacobian: dE/dlng ≈ 76124, dN/dlat ≈ 111171 (in LV95 meters per degree)
+        for (let i = 0; i < 10; i++) {
+            const computed = wgs84ToLV95(lat, lng);
+            const de = e - computed.e;
+            const dn = n - computed.n;
+            if (Math.abs(de) < 0.01 && Math.abs(dn) < 0.01) break;
+            lng += de / 76124;
+            lat += dn / 111171;
+        }
+
+        return { lat, lng };
+    }
+
+    async function handleSearch(query) {
+        // 1. Try Coordinate Search (WGS84 or LV95)
+        const coords = parsePossibleCoordinates(query);
+        if (coords) {
+            await displayCoordResult(coords);
+            return;
+        }
+
+        // 2. Otherwise perform location search
+        performLocationSearch(query);
+    }
+
+    function parsePossibleCoordinates(query) {
+        const cleanQuery = query.trim().replace(/\s+/g, ' ');
+        
+        // WGS84: 46.123 6.456
+        const wgsRegex = /^([-+]?\d{1,2}\.\d+)[,\s/]+([-+]?\d{1,3}\.\d+)$/;
+        const matchWgs = cleanQuery.match(wgsRegex);
+        if (matchWgs) {
+            const lat = parseFloat(matchWgs[1]);
+            const lng = parseFloat(matchWgs[2]);
+            if (lat > 45 && lat < 48 && lng > 5 && lng < 12) {
+                return { lat, lng, type: 'WGS84' };
+            }
+        }
+
+        // LV95: 2600000 1200000
+        const lv95Regex = /^(\d{6,7})[,\s/]+(\d{6,7})$/;
+        const matchLv95 = cleanQuery.match(lv95Regex);
+        if (matchLv95) {
+            const e = parseInt(matchLv95[1]);
+            const n = parseInt(matchLv95[2]);
+            if (e > 2400000 && e < 2900000 && n > 1000000 && n < 1400000) {
+                // Return raw LV95, will be converted via API
+                return { e, n, type: 'LV95', orig: `${e}, ${n}` };
+            }
+        }
+        return null;
+    }
+
+    async function displayCoordResult(coords) {
+        searchResultsDiv.innerHTML = '';
+        const li = document.createElement('li');
+        li.className = 'search-result-item';
+        
+        const title = document.createElement('div');
+        title.className = 'search-result-title';
+        title.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; color:var(--primary);">location_on</span> Aller aux coordonnées`;
+        
+        const subtitle = document.createElement('div');
+        subtitle.className = 'search-result-subtitle';
+        
+        if (coords.type === 'LV95') {
+            subtitle.textContent = `LV95 : ${coords.orig} — Conversion en cours...`;
+            li.appendChild(title);
+            li.appendChild(subtitle);
+            searchResultsDiv.appendChild(li);
+            searchResultsDiv.classList.remove('hidden');
+
+            // Use official Swisstopo REST API for exact conversion
+            try {
+                const apiUrl = `https://geodesy.geo.admin.ch/reframe/lv95towgs84?easting=${coords.e}&northing=${coords.n}&format=json`;
+                const resp = await fetch(apiUrl);
+                const json = await resp.json();
+                // API returns: { easting: lng, northing: lat }
+                const lat = json.northing;
+                const lng = json.easting;
+                subtitle.textContent = `LV95 : ${coords.orig} → GPS : ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                li.onclick = () => goToLocation(lat, lng, coords.orig);
+            } catch(err) {
+                // Fallback to approximation if API unavailable
+                console.warn('Swisstopo API unavailable, using approximation', err);
+                const approx = lv95ToWGS84(coords.e, coords.n);
+                subtitle.textContent = `LV95 : ${coords.orig} (approximation)`;
+                li.onclick = () => goToLocation(approx.lat, approx.lng, coords.orig);
+            }
+        } else {
+            subtitle.textContent = `GPS (WGS84) : ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
+            li.appendChild(title);
+            li.appendChild(subtitle);
+            searchResultsDiv.appendChild(li);
+            searchResultsDiv.classList.remove('hidden');
+            li.addEventListener('click', () => {
+                goToLocation(coords.lat, coords.lng, `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+            });
+        }
+    }
+
+    function goToLocation(lat, lng, name) {
+        if (!dataEnabled && btnToggleData) {
+            dataEnabled = true;
+            btnToggleData.querySelector('.material-symbols-outlined').textContent = 'visibility';
+        }
+        
+        // Remove any previous search marker
+        if (searchMarker) {
+            map.removeLayer(searchMarker);
+            searchMarker = null;
+        }
+
+        // Place a persistent marker at the EXACT searched location
+        const searchIcon = L.divIcon({
+            className: 'search-marker-icon',
+            html: `<div style="
+                width: 22px; height: 22px;
+                background: var(--primary);
+                border: 3px solid white;
+                border-radius: 50% 50% 50% 0;
+                transform: rotate(-45deg);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            "></div>`,
+            iconSize: [22, 22],
+            iconAnchor: [11, 22]
+        });
+        searchMarker = L.marker([lat, lng], { icon: searchIcon, zIndexOffset: 1000 }).addTo(map);
+
+        // Fly to exact coordinates, then load data for THOSE coords (not map center)
+        map.flyTo([lat, lng], 17, { animate: true, duration: 1.0 });
+        
+        // Load data directly for the searched point, bypassing moveend
+        reverseGeocode(lat, lng);
+
+        searchResultsDiv.classList.add('hidden');
+        searchInput.value = name;
+        searchContainer.classList.remove('searching');
     }
 
     async function performLocationSearch(query) {
@@ -593,17 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     li.appendChild(subtitle);
                     
                     li.addEventListener('click', () => {
-                        const lat = parseFloat(item.lat);
-                        const lon = parseFloat(item.lon);
-                        
-                        if (!dataEnabled && btnToggleData) {
-                            dataEnabled = true;
-                            btnToggleData.querySelector('.material-symbols-outlined').textContent = 'visibility';
-                        }
-                        
-                        map.flyTo([lat, lon], 16, { animate: true, duration: 1.2 });
-                        searchResultsDiv.classList.add('hidden');
-                        searchInput.value = name;
+                        goToLocation(parseFloat(item.lat), parseFloat(item.lon), name);
                     });
                     
                     searchResultsDiv.appendChild(li);
@@ -630,7 +846,16 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('click', () => {
             const strong = card.querySelector('strong');
             if (strong && !strong.classList.contains('skeleton') && strong.textContent.trim() !== '-' && strong.textContent.trim() !== '') {
-                const textToCopy = strong.innerText.replace(/\n\n/g, ' ').replace(/\n/g, ' - ');
+                let textToCopy = "";
+                
+                // Si c'est la carte des coordonnées, ne copier que la première ligne (LV95)
+                if (card.id === 'card-coords') {
+                    // On récupère le texte brut du strong, et on ne prend que ce qui précède le premier saut de ligne
+                    textToCopy = strong.innerText.split('\n')[0].trim();
+                } else {
+                    textToCopy = strong.innerText.replace(/\n\n/g, ' ').replace(/\n/g, ' - ');
+                }
+
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(textToCopy).then(() => {
                         const label = card.querySelector('.label').textContent;

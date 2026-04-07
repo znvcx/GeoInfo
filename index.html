@@ -1,31 +1,36 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
     <!-- PWA Installation -->
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="assets/pwa/manifest.json">
     <meta name="theme-color" content="#3b82f6">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="assets/img/icon-192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>GeoInfo Vaud</title>
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
-    <link rel="stylesheet" href="style.css">
-    
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="assets/css/style.css">
+
     <!-- PWA Config (Manifest) for Android integration -->
     <meta name="theme-color" content="#10b981">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
+
 <body>
     <div id="map"></div>
-    
+
     <!-- Search Bar -->
     <div class="search-container">
         <div class="search-wrapper">
@@ -36,7 +41,7 @@
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            
+
             <!-- Floating action buttons -->
             <div class="fab-container">
                 <button id="btn-map-style" class="fab secondary" title="Vue Satellite">
@@ -51,11 +56,14 @@
                 <button id="btn-locate" class="fab primary" title="Me localiser">
                     <span class="material-symbols-outlined">my_location</span>
                 </button>
+                <button id="btn-about-main" class="fab secondary" title="À propos">
+                    <span class="material-symbols-outlined">info</span>
+                </button>
             </div>
         </div>
         <ul id="search-results" class="search-results hidden"></ul>
     </div>
-    
+
     <!-- Crosshair indicator in the center of the map for selecting location -->
     <div class="map-crosshair">
         <span class="material-symbols-outlined">center_focus_strong</span>
@@ -69,7 +77,7 @@
         <div class="sheet-content">
             <h2 id="location-title">Recherche...</h2>
             <p id="location-subtitle" class="subtitle">Déplacez la carte pour sélectionner un point.</p>
-            
+
             <div class="info-grid">
                 <div class="info-card" id="card-commune">
                     <span class="material-symbols-outlined icon">location_city</span>
@@ -77,6 +85,9 @@
                         <span class="label">Commune</span>
                         <strong id="info-commune">-</strong>
                     </div>
+                    <button class="btn-boundary" data-type="commune" title="Afficher les limites">
+                        <span class="material-symbols-outlined">map</span>
+                    </button>
                 </div>
                 <div class="info-card" id="card-district">
                     <span class="material-symbols-outlined icon">map</span>
@@ -84,6 +95,9 @@
                         <span class="label">District</span>
                         <strong id="info-district">-</strong>
                     </div>
+                    <button class="btn-boundary" data-type="district" title="Afficher les limites">
+                        <span class="material-symbols-outlined">map</span>
+                    </button>
                 </div>
                 <div class="info-card" id="card-canton">
                     <span class="material-symbols-outlined icon">explore</span>
@@ -91,6 +105,9 @@
                         <span class="label">Canton</span>
                         <strong id="info-canton">-</strong>
                     </div>
+                    <button class="btn-boundary" data-type="canton" title="Afficher les limites">
+                        <span class="material-symbols-outlined">map</span>
+                    </button>
                 </div>
                 <div class="info-card" id="card-justice" style="display: none;">
                     <span class="material-symbols-outlined icon">gavel</span>
@@ -98,6 +115,9 @@
                         <span class="label">Ministère Public</span>
                         <strong id="info-justice">-</strong>
                     </div>
+                    <button class="btn-boundary" data-type="justice" title="Afficher les limites">
+                        <span class="material-symbols-outlined">map</span>
+                    </button>
                 </div>
                 <div class="info-card" id="card-police" style="display: none;">
                     <span class="material-symbols-outlined icon">local_police</span>
@@ -179,8 +199,10 @@
                 <div class="toggle-slider"></div>
             </label>
         </div>
-        <div style="margin-top: auto; padding-top: 16px; text-align: center; border-top: 1px solid rgba(120, 120, 120, 0.2);">
-            <button id="btn-about" class="btn-text" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;">
+        <div
+            style="margin-top: auto; padding-top: 16px; text-align: center; border-top: 1px solid rgba(120, 120, 120, 0.2);">
+            <button id="btn-about" class="btn-text"
+                style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;">
                 <span class="material-symbols-outlined" style="font-size: 18px;">info</span>
                 À propos
             </button>
@@ -192,13 +214,75 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 style="font-size: 20px; font-weight: 700;">GeoInfo</h2>
-                <button id="btn-close-about" class="icon-button"><span class="material-symbols-outlined">close</span></button>
+                <button id="btn-close-about" class="icon-button"><span
+                        class="material-symbols-outlined">close</span></button>
             </div>
             <div class="modal-body">
-                <p><strong>GeoInfo</strong> est une application web cartographique interactive conçue pour fournir rapidement des informations administratives et géographiques (Commune, District, Ministère Public, Police, etc.) d'un point précis dans le canton de Vaud et en Suisse.</p>
-                <p style="margin-top: 16px;"><strong>Projet personnel & Données publiques</strong><br>Les informations affichées proviennent de sources de données publiques ouvertes (OpenStreetMap, Swisstopo). Le développement de cet outil est un projet personnel.</p>
-                <p style="margin-top: 16px;"><strong>Avertissement</strong><br>Aucune garantie n'est donnée quant à l'exactitude, la mise à jour ou l'exhaustivité des informations. L'utilisation de ces données se fait sous la seule responsabilité de l'utilisateur.</p>
-                <p style="margin-top:24px; font-size:12px; text-align:center; color: var(--text-muted);">&copy; 2026 - GeoInfo Vaud</p>
+                <section class="about-section">
+                    <h3>Qu'est-ce que GeoInfo ?</h3>
+                    <p><strong>GeoInfo</strong> est un outil cartographique interactif optimisé pour la Suisse, et plus
+                        particulièrement pour le <strong>Canton de Vaud</strong>. Il permet d'identifier instantanément
+                        les appartenances administratives et territoriales d'un point géographique précis.</p>
+                </section>
+
+                <section class="about-section">
+                    <h3>Comment l'utiliser ?</h3>
+                    <ul>
+                        <li><strong>Navigation libre :</strong> Déplacez la carte jusqu'au point souhaité. Les
+                            informations se mettent à jour automatiquement après une seconde d'arrêt.</li>
+                        <li><strong>Recherche :</strong> Utilisez la barre de recherche en haut pour trouver une adresse
+                            spécifique.</li>
+                        <li><strong>Ma position :</strong> Cliquez sur le bouton <span class="material-symbols-outlined"
+                                style="font-size:14px;vertical-align:middle;">my_location</span> pour centrer la carte
+                            sur votre position GPS actuelle.</li>
+                        <li><strong>Découvrir les limites :</strong> Pour la Commune, le District, le Canton et le
+                            Ministère Public, cliquez sur l'icône <span class="material-symbols-outlined"
+                                style="font-size:14px;vertical-align:middle;">map</span> dans les fiches d'info pour
+                            afficher les frontières administratives.</li>
+                        <li><strong>Copier les infos :</strong> Cliquez sur n'importe quelle fiche d'information pour
+                            copier son contenu dans votre presse-papier.</li>
+                    </ul>
+                </section>
+
+                <section class="about-section">
+                    <h3>Fonctionnalités avancées</h3>
+                    <p>Basculez entre la vue plan et <strong>satellite</strong> via le bouton <span
+                            class="material-symbols-outlined"
+                            style="font-size:14px;vertical-align:middle;">satellite_alt</span>. Gérez l'affichage des
+                        informations grâce au menu des couches <span class="material-symbols-outlined"
+                            style="font-size:14px;vertical-align:middle;">layers</span>.</p>
+                    <p>Affichage des coordonnées en format <strong>WGS84</strong> (GPS standard) et
+                        <strong>LV95</strong> (coordonnées suisses).
+                    </p>
+                </section>
+
+                <section class="about-section">
+                    <h3>Code Source</h3>
+                    <p>GeoInfo est un projet <strong>open source</strong>. Vous pouvez consulter, contribuer ou signaler
+                        des problèmes sur le dépôt GitHub officiel :</p>
+                    <p style="margin-top: 10px;">
+                        <a href="https://github.com/znvcx/GeoInfo" target="_blank" class="github-link">
+                            <span class="material-symbols-outlined"
+                                style="font-size:18px; vertical-align:middle; margin-right:4px;">code</span>
+                            github.com/znvcx/GeoInfo
+                        </a>
+                    </p>
+                </section>
+
+                <div class="divider"></div>
+
+                <section class="about-section legal-info">
+                    <p><strong>Projet personnel & Données publiques</strong><br>Les informations affichées proviennent
+                        de sources de données publiques ouvertes (OpenStreetMap, Nominatim, ESRI, Swisstopo). Ce projet
+                        est développé à titre personnel pour faciliter l'accès à l'information géographique.</p>
+                    <p style="margin-top: 12px;"><strong>Avertissement</strong><br>GeoInfo n'est pas une application
+                        officielle. Aucune garantie n'est donnée quant à l'exactitude, la mise à jour ou l'exhaustivité
+                        des informations. L'utilisation de ces données se fait sous la seule responsabilité de
+                        l'utilisateur.</p>
+                </section>
+
+                <p style="margin-top:24px; font-size:11px; text-align:center; color: var(--text-muted);">&copy; 2026 -
+                    GeoInfo Vaud</p>
             </div>
         </div>
     </div>
@@ -206,9 +290,12 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden">Copié !</div>
 
+    <script defer src="https://stats.zrx.one/script.js" data-website-id="288e6420-f093-47d5-ae07-d95ffbe4b9ba"></script>
+
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="main.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="assets/js/main.js"></script>
 
     <!-- Service Worker Registration -->
     <script>
@@ -220,5 +307,7 @@
             });
         }
     </script>
+
 </body>
+
 </html>

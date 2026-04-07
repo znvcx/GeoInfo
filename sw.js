@@ -1,12 +1,12 @@
-const CACHE_NAME = 'geoinfo-v2';
+const CACHE_NAME = 'geoinfo-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css',
-  './main.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './assets/css/style.css',
+  './assets/js/main.js',
+  './assets/pwa/manifest.json',
+  './assets/img/icon-192.png',
+  './assets/img/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
