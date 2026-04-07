@@ -28,7 +28,7 @@ Le projet est entièrement "Client-Side" (statique) et sans Backend externe requ
 
 1.  Clonez ce dépôt :
     ```bash
-    git clone https://github.com/VOTRE-NOM/GeoInfo.git
+    git clone https://github.com/znvcx/GeoInfo.git
     cd GeoInfo
     ```
 2.  Lancez un simple serveur HTTP local (indispensable pour l'installation progressive PWA et requêtes API) :

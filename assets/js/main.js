@@ -2,16 +2,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Canton Vaud roughly centered
     const INITIAL_COORDS = [46.5197, 6.6323]; // Lausanne
     const INITIAL_ZOOM = 13;
-    
+
     // Bounds for Switzerland approx, to restrict the map 
     // bounding box: 45.8, 5.9, 47.8, 10.5
     const SWISS_BOUNDS = [
-        [45.8, 5.9], 
+        [45.8, 5.9],
         [47.8, 10.5]
     ];
 
     const map = L.map('map', {
-        zoomControl: false, 
+        zoomControl: false,
         maxBounds: SWISS_BOUNDS,
         maxBoundsViscosity: 1.0,
         minZoom: 9
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
         plan: isDarkMode ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
     };
-    
+
     let currentMapStyle = 'plan';
     const tileLayer = L.tileLayer(mapStyles.plan, {
         attribution: '&copy; Carto & OSM | Esri',
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const locationSubtitle = document.getElementById('location-subtitle');
     const searchContainer = document.querySelector('.search-container');
     const btnToggleData = document.getElementById('btn-toggle-data');
-    
+
     let isFetching = false;
     let dataEnabled = true;
     let sheetState = 'expanded';
@@ -88,50 +88,50 @@ document.addEventListener('DOMContentLoaded', () => {
         const phi_aux = (lat * 3600 - 169028.66) / 10000;
         const lambda_aux = (lng * 3600 - 26782.5) / 10000;
 
-        const e = 2600072.37 
-                + 211455.93 * lambda_aux 
-                - 10938.51 * lambda_aux * phi_aux 
-                - 0.36 * lambda_aux * Math.pow(phi_aux, 2) 
-                - 44.54 * Math.pow(lambda_aux, 3);
+        const e = 2600072.37
+            + 211455.93 * lambda_aux
+            - 10938.51 * lambda_aux * phi_aux
+            - 0.36 * lambda_aux * Math.pow(phi_aux, 2)
+            - 44.54 * Math.pow(lambda_aux, 3);
 
-        const n = 1200147.07 
-                + 308807.95 * phi_aux 
-                + 3745.25 * Math.pow(lambda_aux, 2) 
-                + 76.63 * Math.pow(phi_aux, 2) 
-                - 194.56 * Math.pow(lambda_aux, 2) * phi_aux 
-                + 119.79 * Math.pow(phi_aux, 3);
-        
+        const n = 1200147.07
+            + 308807.95 * phi_aux
+            + 3745.25 * Math.pow(lambda_aux, 2)
+            + 76.63 * Math.pow(phi_aux, 2)
+            - 194.56 * Math.pow(lambda_aux, 2) * phi_aux
+            + 119.79 * Math.pow(phi_aux, 3);
+
         return { e: e, n: n };
     }
 
     async function reverseGeocode(lat, lng) {
         if (isFetching) return;
         isFetching = true;
-        
+
         const lv95 = wgs84ToLV95(lat, lng);
         const wgsText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         const chText = `${Math.round(lv95.e)}, ${Math.round(lv95.n)}`;
-        
+
         // Skeletons feedback
         const textElements = [infoCommune, infoDistrict, infoCanton, infoAddress, infoLieudit];
         if (infoJustice) textElements.push(infoJustice);
         if (infoPolice) textElements.push(infoPolice);
-        
+
         textElements.forEach(el => {
             el.classList.add('skeleton');
-            if(el.id !== 'info-address') el.innerHTML = '&nbsp;';
+            if (el.id !== 'info-address') el.innerHTML = '&nbsp;';
             else el.innerHTML = '&nbsp;<br>&nbsp;';
         });
 
         locationTitle.textContent = "Recherche...";
         locationSubtitle.textContent = "Chargement des données...";
-        
+
         // Coordonnées: CH (LV95) en grand, WGS en petit
         infoCoords.innerHTML = `${chText}<br><span style="font-size: 11px; color: var(--text-muted); font-weight: normal; margin-top: 2px; display: block;">GPS (WGS84) : ${wgsText}</span>`;
-        
+
         if (cardJustice) cardJustice.style.display = 'none';
         if (cardPolice) cardPolice.style.display = 'none';
-        
+
         if (dataEnabled) {
             bottomSheet.classList.remove('hidden');
             fabContainer.classList.remove('sheet-hidden');
@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Nominatim API (Zoom 18 for street level + extratags for RC numbers)
             const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&addressdetails=1&countrycodes=ch&zoom=18&extratags=1`;
-            
+
             const response = await fetch(url, {
                 headers: {
                     'Accept-Language': 'fr-CH, fr'
@@ -151,32 +151,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data && !data.error && data.address) {
                 const addr = data.address;
-                
+
                 const commune = addr.village || addr.town || addr.city || addr.municipality || 'Inconnue';
                 const district = addr.county || addr.district || 'Inconnu';
                 const canton = addr.state || 'Inconnu';
-                
+
                 let displayName = data.name || commune;
-                if(!data.name && addr.road) {
+                if (!data.name && addr.road) {
                     displayName = addr.road;
                 }
-                
+
                 // Format display limits
-                if(displayName.length > 25) {
+                if (displayName.length > 25) {
                     displayName = displayName.substring(0, 25) + '...';
                 }
 
                 locationTitle.textContent = displayName;
                 locationSubtitle.textContent = canton === 'Vaud' ? 'Canton de Vaud, Suisse' : `${canton}, Suisse`;
-                
+
                 infoCommune.textContent = commune;
                 const cleanDistrict = district.replace('District de ', '').replace('District d\'', '').trim();
                 infoDistrict.textContent = cleanDistrict;
                 infoCanton.textContent = canton;
-                
+
                 // Adresse parsing
                 const extratags = data.extratags || {};
-                
+
                 let roadRef = "";
                 let isRC = false;
 
@@ -189,42 +189,42 @@ document.addEventListener('DOMContentLoaded', () => {
                         isRC = true;
                     }
                 }
-                
+
                 const street = addr.road || addr.pedestrian || addr.path || addr.footway || "Lieu sans rue spécifique";
                 const houseNumber = addr.house_number ? ` ${addr.house_number}` : "";
                 const postCode = addr.postcode ? `${addr.postcode} ` : "";
                 let addressText = "";
-                
+
                 if (street !== "Lieu sans rue spécifique") {
                     addressText = `${postCode}${commune}, ${street}${houseNumber}`;
                 } else {
                     addressText = `${postCode}${commune}`;
                 }
-                
+
                 if (isRC) {
                     let displayRef = roadRef.toUpperCase().startsWith("RC") ? roadRef : `RC ${roadRef}`;
                     addressText += `<br><span style="font-size:11px; color:var(--primary); font-weight:600;">Route Cantonale : ${displayRef}</span>`;
                 } else if (roadRef) {
                     addressText += `<br><span style="font-size:11px; color:var(--text-muted); font-weight:700;">Route ${roadRef}</span>`;
                 }
-                
+
                 infoAddress.innerHTML = addressText;
-                
+
                 // Lieu-dit parsing
                 const lieuDit = addr.locality || addr.isolated_dwelling || addr.hamlet || addr.neighbourhood || addr.croft || addr.suburb || "Aucun lieu-dit identifié";
                 infoLieudit.textContent = lieuDit;
-                
+
                 // Effacer la surbrillance lors du changement de zone
                 if (activeBoundaryLayer) {
                     map.removeLayer(activeBoundaryLayer);
                     activeBoundaryLayer = null;
                 }
-                
+
                 if (canton === 'Vaud' && cardJustice) {
                     cardJustice.style.display = 'flex';
-                    
-                    const queryText = (commune + " " + cleanDistrict + " " + (addr.county||'') + " " + (addr.state_district||'') + " " + (addr.city||'')).toLowerCase();
-                    
+
+                    const queryText = (commune + " " + cleanDistrict + " " + (addr.county || '') + " " + (addr.state_district || '') + " " + (addr.city || '')).toLowerCase();
+
                     if (queryText.includes("aigle") || queryText.includes("lavaux") || queryText.includes("oron") || queryText.includes("riviera") || queryText.includes("enhaut")) {
                         infoJustice.textContent = "MP de l'Est vaudois";
                     } else if (queryText.includes("broye") || queryText.includes("vully") || queryText.includes("gros-de-vaud") || queryText.includes("jura") || queryText.includes("yverdon")) {
@@ -239,12 +239,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (cardJustice) {
                     cardJustice.style.display = 'none';
                 }
-                
+
                 // Police assignment
                 if (canton === 'Vaud' && cardPolice) {
                     cardPolice.style.display = 'flex';
                     const c = commune.toLowerCase();
-                    
+
                     if (c.includes("lausanne") && !c.includes("belmont") && !c.includes("mont-sur")) {
                         infoPolice.textContent = "Police de Lausanne";
                     } else if (c.includes("bussigny") || c.includes("chavannes-près-renens") || c.includes("crissier") || c.includes("ecublens") || c.includes("prilly") || c.includes("renens") || c.includes("saint-sulpice") || c.includes("villars-sainte-croix")) {
@@ -269,8 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (cardPolice) {
                     cardPolice.style.display = 'none';
                 }
-                
-                if(canton !== 'Vaud') {
+
+                if (canton !== 'Vaud') {
                     locationSubtitle.textContent += " (Hors Vaud)";
                     locationSubtitle.style.color = "#f59e0b"; // Warning
                 } else {
@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (infoJustice) textElements.push(infoJustice);
             if (infoPolice) textElements.push(infoPolice);
             textElements.forEach(el => el.classList.remove('skeleton'));
-            
+
             isFetching = false;
         }
     }
@@ -322,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnLocate = document.getElementById('btn-locate');
     btnLocate.addEventListener('click', () => {
         btnLocate.classList.add('pulse');
-        
+
         // Let user know it's locating
         if (dataEnabled) {
             bottomSheet.classList.remove('hidden');
@@ -331,9 +331,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchContainer) searchContainer.classList.remove('hidden');
         locationTitle.textContent = "Localisation...";
         locationSubtitle.textContent = "Acquisition du signal GPS...";
-        
-        map.locate({ 
-            setView: true, 
+
+        map.locate({
+            setView: true,
             maxZoom: 15,
             enableHighAccuracy: true
         });
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     map.on('locationfound', (e) => {
         btnLocate.classList.remove('pulse');
-        
+
         if (userMarker) {
             userMarker.setLatLng(e.latlng);
         } else {
@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             });
-            userMarker = L.marker(e.latlng, {icon: userIcon}).addTo(map);
+            userMarker = L.marker(e.latlng, { icon: userIcon }).addTo(map);
         }
     });
 
@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             let url = '';
             showToast("Recherche des limites...");
-            
+
             if (type === 'commune') {
                 url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(name)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
             } else if (type === 'district') {
@@ -404,10 +404,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data && data.length > 0 && data[0].geojson) {
                 const geojson = data[0].geojson;
                 if (geojson.type === "Point") {
-                     showToast("Seul un point a été trouvé, pas de limites.");
-                     return;
+                    showToast("Seul un point a été trouvé, pas de limites.");
+                    return;
                 }
-                
+
                 let color = "#3b82f6";
                 if (type === 'canton') color = "#10b981";
                 if (type === 'district') color = "#f59e0b";
@@ -415,9 +415,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 activeBoundaryLayer = L.geoJSON(geojson, {
                     style: {
-                        color: color, 
-                        weight: 3, 
-                        opacity: 0.8, 
+                        color: color,
+                        weight: 3,
+                        opacity: 0.8,
                         fillOpacity: 0.15
                     },
                     interactive: false
@@ -439,13 +439,13 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation(); // Avoid triggering copy
             const type = btn.getAttribute('data-type');
-            
+
             // Get text content
             let targetId = `info-${type}`;
             const el = document.getElementById(targetId);
             if (el && !el.classList.contains('skeleton')) {
-               const name = el.textContent.trim();
-               loadBoundary(type, name, btn);
+                const name = el.textContent.trim();
+                loadBoundary(type, name, btn);
             }
         });
     });
@@ -456,8 +456,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     locationTitle.textContent = "Localisation initiale...";
     locationSubtitle.textContent = "Acquisition du signal GPS...";
-    map.locate({ 
-        setView: true, 
+    map.locate({
+        setView: true,
         maxZoom: 15,
         enableHighAccuracy: true
     });
@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const icon = btnToggleData.querySelector('.material-symbols-outlined');
             if (dataEnabled) {
                 icon.textContent = 'visibility';
-                
+
                 // Fetch current position data
                 const center = map.getCenter();
                 reverseGeocode(center.lat, center.lng);
@@ -492,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCloseLayers.addEventListener('click', () => {
         layersMenu.classList.add('hidden');
     });
-    
+
     // About Modal
     const btnAbout = document.getElementById('btn-about');
     const modalAbout = document.getElementById('modal-about');
@@ -510,34 +510,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 modalAbout.classList.remove('hidden');
             });
         }
-        
+
         btnCloseAbout.addEventListener('click', () => {
             modalAbout.classList.add('hidden');
         });
-        
+
         // Close modal when clicking outside
         modalAbout.addEventListener('click', (e) => {
-            if(e.target === modalAbout) {
+            if (e.target === modalAbout) {
                 modalAbout.classList.add('hidden');
             }
         });
     }
-    
+
     // Center map on click and handle data visibility
     map.on('click', (e) => {
         let closedMenu = false;
-        
-        if(!layersMenu.classList.contains('hidden')) {
+
+        if (!layersMenu.classList.contains('hidden')) {
             layersMenu.classList.add('hidden');
             closedMenu = true;
         }
-        
+
         const searchResults = document.getElementById('search-results');
-        if(searchResults && !searchResults.classList.contains('hidden')) {
+        if (searchResults && !searchResults.classList.contains('hidden')) {
             searchResults.classList.add('hidden');
             closedMenu = true;
         }
-        
+
         // Don't pan if the user was just clicking to dismiss a menu
         if (closedMenu) return;
 
@@ -546,11 +546,11 @@ document.addEventListener('DOMContentLoaded', () => {
             dataEnabled = true;
             btnToggleData.querySelector('.material-symbols-outlined').textContent = 'visibility';
         }
-        
+
         // Center the map smoothly, which triggers moveend and fetches data
         if (e.latlng) {
             map.panTo(e.latlng, { animate: true, duration: 0.5 });
-            
+
             // Expand sheet if collapsed so user sees the new data
             if (bottomSheet) {
                 bottomSheet.classList.remove('hidden', 'collapsed');
@@ -621,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 handleSearch(query);
-            }, 400); 
+            }, 400);
         });
 
         btnClearSearch.addEventListener('click', () => {
@@ -647,10 +647,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Start with polynomial approximation as initial guess
         const y_p = (e - 2600000) / 1000000;
         const x_p = (n - 1200000) / 1000000;
-        let lat = (16.9023892 + 3.230773*x_p - 0.270978*y_p*y_p 
-                   - 0.002528*x_p*x_p - 0.0447*y_p*y_p*x_p - 0.0140*x_p*x_p*x_p) * 100/36;
-        let lng = (2.6779094 + 4.728982*y_p + 0.791484*y_p*x_p 
-                   + 0.1306*y_p*x_p*x_p - 0.0436*y_p*y_p*y_p) * 100/36;
+        let lat = (16.9023892 + 3.230773 * x_p - 0.270978 * y_p * y_p
+            - 0.002528 * x_p * x_p - 0.0447 * y_p * y_p * x_p - 0.0140 * x_p * x_p * x_p) * 100 / 36;
+        let lng = (2.6779094 + 4.728982 * y_p + 0.791484 * y_p * x_p
+            + 0.1306 * y_p * x_p * x_p - 0.0436 * y_p * y_p * y_p) * 100 / 36;
 
         // Iterative Newton refinement: correct until round-trip error < 0.01m
         // Jacobian: dE/dlng ≈ 76124, dN/dlat ≈ 111171 (in LV95 meters per degree)
@@ -680,7 +680,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function parsePossibleCoordinates(query) {
         const cleanQuery = query.trim().replace(/\s+/g, ' ');
-        
+
         // WGS84: 46.123 6.456
         const wgsRegex = /^([-+]?\d{1,2}\.\d+)[,\s/]+([-+]?\d{1,3}\.\d+)$/;
         const matchWgs = cleanQuery.match(wgsRegex);
@@ -710,14 +710,14 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResultsDiv.innerHTML = '';
         const li = document.createElement('li');
         li.className = 'search-result-item';
-        
+
         const title = document.createElement('div');
         title.className = 'search-result-title';
         title.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; color:var(--primary);">location_on</span> Aller aux coordonnées`;
-        
+
         const subtitle = document.createElement('div');
         subtitle.className = 'search-result-subtitle';
-        
+
         if (coords.type === 'LV95') {
             subtitle.textContent = `LV95 : ${coords.orig} — Conversion en cours...`;
             li.appendChild(title);
@@ -735,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lng = json.easting;
                 subtitle.textContent = `LV95 : ${coords.orig} → GPS : ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
                 li.onclick = () => goToLocation(lat, lng, coords.orig);
-            } catch(err) {
+            } catch (err) {
                 // Fallback to approximation if API unavailable
                 console.warn('Swisstopo API unavailable, using approximation', err);
                 const approx = lv95ToWGS84(coords.e, coords.n);
@@ -759,7 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dataEnabled = true;
             btnToggleData.querySelector('.material-symbols-outlined').textContent = 'visibility';
         }
-        
+
         // Remove any previous search marker
         if (searchMarker) {
             map.removeLayer(searchMarker);
@@ -784,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Fly to exact coordinates, then load data for THOSE coords (not map center)
         map.flyTo([lat, lng], 17, { animate: true, duration: 1.0 });
-        
+
         // Load data directly for the searched point, bypassing moveend
         reverseGeocode(lat, lng);
 
@@ -799,29 +799,29 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(url, { headers: { 'Accept-Language': 'fr-CH, fr' } });
             const data = await response.json();
-            
+
             searchResultsDiv.innerHTML = '';
             if (data && data.length > 0) {
                 data.forEach(item => {
                     const li = document.createElement('li');
                     li.className = 'search-result-item';
-                    
+
                     const title = document.createElement('div');
                     title.className = 'search-result-title';
                     const name = item.name || (item.address && (item.address.road || item.address.village || item.address.town)) || 'Lieu';
                     title.textContent = name;
-                    
+
                     const subtitle = document.createElement('div');
                     subtitle.className = 'search-result-subtitle';
                     subtitle.textContent = item.display_name;
-                    
+
                     li.appendChild(title);
                     li.appendChild(subtitle);
-                    
+
                     li.addEventListener('click', () => {
                         goToLocation(parseFloat(item.lat), parseFloat(item.lon), name);
                     });
-                    
+
                     searchResultsDiv.appendChild(li);
                 });
                 searchResultsDiv.classList.remove('hidden');
@@ -847,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const strong = card.querySelector('strong');
             if (strong && !strong.classList.contains('skeleton') && strong.textContent.trim() !== '-' && strong.textContent.trim() !== '') {
                 let textToCopy = "";
-                
+
                 // Si c'est la carte des coordonnées, ne copier que la première ligne (LV95)
                 if (card.id === 'card-coords') {
                     // On récupère le texte brut du strong, et on ne prend que ce qui précède le premier saut de ligne
@@ -870,7 +870,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let touchStartY = 0;
     let touchCurrentY = 0;
     let isDraggingSheet = false;
-    
+
     bottomSheet.addEventListener('touchstart', (e) => {
         // Only ignore if scrolling inside an element that overflows, or search results
         if (e.target.closest('.search-results') || bottomSheet.scrollTop > 0) return;
@@ -878,13 +878,13 @@ document.addEventListener('DOMContentLoaded', () => {
         touchCurrentY = touchStartY;
         isDraggingSheet = true;
         bottomSheet.classList.add('no-transition');
-    }, {passive: true});
+    }, { passive: true });
 
     bottomSheet.addEventListener('touchmove', (e) => {
         if (!isDraggingSheet) return;
         touchCurrentY = e.touches[0].clientY;
         const deltaY = touchCurrentY - touchStartY;
-        
+
         if (sheetState === 'expanded' && deltaY > 0) {
             bottomSheet.style.transform = `translateY(${deltaY}px)`;
         } else if (sheetState === 'collapsed') {
@@ -892,14 +892,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const newY = offset + deltaY;
             if (newY >= 0) bottomSheet.style.transform = `translateY(${newY}px)`;
         }
-    }, {passive: true});
+    }, { passive: true });
 
     bottomSheet.addEventListener('touchend', () => {
         if (!isDraggingSheet) return;
         isDraggingSheet = false;
         bottomSheet.classList.remove('no-transition');
-        bottomSheet.style.transform = ''; 
-        
+        bottomSheet.style.transform = '';
+
         const deltaY = touchCurrentY - touchStartY;
         if (sheetState === 'expanded' && deltaY > 50) {
             sheetState = 'collapsed';
