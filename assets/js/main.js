@@ -427,12 +427,6 @@ document.addEventListener('DOMContentLoaded', () => {
         "Police Lavaux (APOL)": ["Bourg-en-Lavaux", "Chexbres", "Lutry", "Puidoux", "Rivaz", "Saint-Saphorin"]
     };
 
-    const JUSTICE_COMMUNES = {
-        "MP de l'Est vaudois": ["Aigle", "Bex", "Ollon", "Montreux", "Vevey", "La Tour-de-Peilz", "Blonay", "Riviera-Pays-d'Enhaut", "Bourg-en-Lavaux", "Lutry", "Puidoux", "Chexbres", "Oron"],
-        "MP du Nord vaudois": ["Yverdon-les-Bains", "Grandson", "Payerne", "Moudon", "Échallens", "Avenches", "Valbroye"],
-        "MP de La Côte": ["Nyon", "Morges", "Rolle", "Aubonne", "Prangins", "Gland"],
-        "MP de Lausanne": ["Lausanne", "Renens", "Prilly", "Bussigny", "Crissier", "Ecublens"]
-    };
 
     // Polygon Borders
     async function fetchCommuneBoundary(communeName) {
@@ -577,17 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation(); // Avoid triggering copy
             const type = btn.getAttribute('data-type');
 
-            if (type === 'justice') {
-                // Find matching MP key by reading current value from DOM
-                const infoEl = document.getElementById('info-justice');
-                const name = infoEl ? infoEl.textContent.trim() : '';
-                const mpKey = Object.keys(JUSTICE_COMMUNES).find(k => name.includes(k) || k.includes(name));
-                if (mpKey) {
-                    loadMultiBoundary(type, JUSTICE_COMMUNES[mpKey], '#8b5cf6');
-                } else {
-                    showToast("Territoire MP non reconnu.");
-                }
-            } else if (type === 'police') {
+            if (type === 'police') {
                 // Find matching Police key by reading current value from DOM
                 const infoEl = document.getElementById('info-police');
                 const name = infoEl ? infoEl.textContent.trim() : '';
