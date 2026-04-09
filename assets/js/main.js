@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const infoJustice = document.getElementById('info-justice');
     const cardPolice = document.getElementById('card-police');
     const infoPolice = document.getElementById('info-police');
+    const cardPatrouille = document.getElementById('card-patrouille');
+    const infoPatrouille = document.getElementById('info-patrouille');
     const infoAddress = document.getElementById('info-address');
     const infoLieudit = document.getElementById('info-lieudit');
     const cardCommune = document.getElementById('card-commune');
@@ -88,6 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
         'Accept-Language': 'fr-CH, fr',
         'User-Agent': 'GeoInfo/1.0 (https://github.com/znvcx/GeoInfo)'
     };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const IS_MAX_INFO = urlParams.get('info') === 'max';
+    
+    // Show hidden elements if debug/max mode
+    if (IS_MAX_INFO) {
+        const item = document.getElementById('layer-item-patrouille');
+        if (item) item.style.display = 'flex';
+    }
 
     // Simple in-memory cache for reverse geocode results
     const geocodeCache = new Map();
@@ -126,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const textElements = [infoCommune, infoDistrict, infoCanton, infoAddress, infoLieudit];
         if (infoJustice) textElements.push(infoJustice);
         if (infoPolice) textElements.push(infoPolice);
+        if (infoPatrouille) textElements.push(infoPatrouille);
 
         textElements.forEach(el => {
             el.classList.add('skeleton');
@@ -141,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (cardJustice) cardJustice.style.display = 'none';
         if (cardPolice) cardPolice.style.display = 'none';
+        if (cardPatrouille) cardPatrouille.style.display = 'none';
 
         if (dataEnabled) {
             bottomSheet.classList.remove('hidden');
@@ -312,6 +325,52 @@ document.addEventListener('DOMContentLoaded', () => {
                     cardPolice.style.display = 'none';
                 }
 
+                // Secteur GM (CGM)
+                if (IS_MAX_INFO && canton === 'Vaud' && cardPatrouille) {
+                    cardPatrouille.style.display = 'flex';
+                    cardPatrouille.style.setProperty('display', 'flex', 'important');
+                    
+                    let sector = "";
+                    const c = commune.toLowerCase();
+                    const cNorm = c.replace(/^(commune de|ville de)\s+/i, '').trim();
+
+                    if (cleanDistrict === 'Aigle' || cleanDistrict === "Riviera-Pays-d'Enhaut") {
+                        sector = 'CGM Est (Rennaz)';
+                    } else if (cleanDistrict === 'Nyon') {
+                        sector = 'CGM Ouest (Bursins)';
+                    } else if (cleanDistrict === 'Lausanne' || cleanDistrict === 'Ouest lausannois' || cleanDistrict === 'Gros-de-Vaud') {
+                        sector = 'CGM Centre (Blécherette)';
+                    } else if (cleanDistrict === 'Jura-Nord vaudois') {
+                        const centreCommunes = ['villars-le-terroir', 'vuarrens', 'bercher', 'pailly', 'essertines', 'fey', 'oppens', 'oulens'];
+                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Nord (Yverdon)';
+                    } else if (cleanDistrict === 'Broye-Vully') {
+                        const centreCommunes = [
+                            'moudon', 'lucens', 'valbroye', 'vucherens', 'syens', 'rossenges', 'hermenches', 'vulliens', 
+                            'bussy-sur-moudon', 'chavannes-sur-moudon', 'chesalles-sur-moudon', 'curtilles', 'dompierre', 
+                            'lovatens', 'prévonloup', 'roche-sur-mane', 'sarzens', 'treytorrens', 'villars-le-comte', 
+                            'brenles', 'forel-sur-lucens', 'cremin', 'granges-près-marnand'
+                        ];
+                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Nord (Yverdon)';
+                    } else if (cleanDistrict === 'Lavaux-Oron') {
+                        const centreCommunes = ['pully', 'paudex', 'belmont', 'lutry', 'savigny', 'bourg-en-lavaux', 'cully', 'epesses', 'grandvaux', 'riex', 'villette', 'forel', 'servion', 'ferlens', 'mézières', 'carrouge', 'montpreveyres'];
+                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Est (Rennaz)';
+                    } else if (cleanDistrict === 'Morges') {
+                        const centreCommunes = [
+                            'morges', 'echichens', 'colombier', 'gollion', 'montricher', "l'isle", 'cossonay', 
+                            'vullierens', 'aclens', 'romanel', 'senarclens', 'la chaux', 'cuarnens', 'mont-la-ville', 'la praz',
+                            'dizy', 'chevilly', 'pampigny', 'cottens', 'sévery', 'apples', 'reverolle', 'bussy', 'grancy', 'chavannes-le-veyron',
+                            'mauraz', 'ferreyres', 'moiry', 'bremblens', 'lonay', 'préverenges', 'denges', 'echandens'
+                        ];
+                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Ouest (Bursins)';
+                    } else {
+                        sector = `CGM Non déterminé (${cleanDistrict})`;
+                    }
+
+                    infoPatrouille.textContent = sector;
+                } else if (cardPatrouille) {
+                    cardPatrouille.style.setProperty('display', 'none', 'important');
+                }
+
                 if (canton !== 'Vaud') {
                     locationSubtitle.textContent += " (Hors Vaud)";
                     locationSubtitle.style.color = "#f59e0b"; // Warning
@@ -329,15 +388,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error(error);
-            // Handle rate limiting specifically
-            if (error.message && error.message.includes('429')) {
+            // Handle rate limiting (429) or connection issues (Failed to fetch)
+            const isRateLimit = (error.message && error.message.includes('429')) || 
+                               (error.name === 'TypeError' && error.message.includes('fetch'));
+
+            if (isRateLimit) {
                 locationTitle.textContent = "Service surchargé";
-                locationSubtitle.textContent = "L'API est temporairement indisponible.";
-                showToast("⏳ Trop de requêtes — patientez quelques secondes.", 5000);
-                // Auto-retry after 5 seconds
+                locationSubtitle.textContent = "Trop de requêtes — Patientez un peu et réessayez plus tard.";
+                locationSubtitle.style.color = "var(--primary)";
+                showToast("⏳ Trop de requêtes — l'API vous demande de patienter.", 6000);
+                
+                // Auto-retry after 8 seconds (slightly more conservative than 5s)
                 setTimeout(() => {
-                    if (dataEnabled) reverseGeocode(lat, lng);
-                }, 5000);
+                    if (dataEnabled) {
+                        const center = map.getCenter();
+                        reverseGeocode(center.lat, center.lng);
+                    }
+                }, 8000);
             } else {
                 locationTitle.textContent = "Erreur";
                 locationSubtitle.textContent = "Impossible de récupérer les informations.";
@@ -347,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const textElements = [infoCommune, infoDistrict, infoCanton, infoAddress, infoLieudit];
             if (infoJustice) textElements.push(infoJustice);
             if (infoPolice) textElements.push(infoPolice);
+            if (infoPatrouille) textElements.push(infoPatrouille);
             textElements.forEach(el => el.classList.remove('skeleton'));
 
             isFetching = false;
@@ -621,6 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chkLieudit = document.getElementById('layer-lieudit');
     const chkJustice = document.getElementById('layer-justice');
     const chkPolice = document.getElementById('layer-police');
+    const chkPatrouille = document.getElementById('layer-patrouille');
     const chkCoords = document.getElementById('layer-coords');
 
     function updateLayersVisibility() {
@@ -632,9 +701,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chkCoords && cardCoords) cardCoords.classList.toggle('layer-hidden', !chkCoords.checked);
         if (chkJustice && cardJustice) cardJustice.classList.toggle('layer-hidden', !chkJustice.checked);
         if (chkPolice && cardPolice) cardPolice.classList.toggle('layer-hidden', !chkPolice.checked);
+        if (chkPatrouille && cardPatrouille) cardPatrouille.classList.toggle('layer-hidden', !chkPatrouille.checked);
     }
 
-    [chkCommune, chkDistrict, chkCanton, chkAddress, chkLieudit, chkJustice, chkPolice, chkCoords].forEach(chk => {
+    [chkCommune, chkDistrict, chkCanton, chkAddress, chkLieudit, chkJustice, chkPolice, chkPatrouille, chkCoords].forEach(chk => {
         if (chk) chk.addEventListener('change', updateLayersVisibility);
     });
 
