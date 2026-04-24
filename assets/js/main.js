@@ -347,26 +347,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     let sector = "";
                     const distLower = cleanDistrict.toLowerCase();
 
-                    if (distLower === 'aigle' || distLower.includes("riviera-pays")) {
+                    const globalCentreCommunes = [
+                        // Communes explicitement listées par l'utilisateur
+                        'morges', 'chigny', 'vufflens-le-château', 'vaux-sur-morges', 'clarmont', 'echichens', 'préverenges', 'lonay', 'bremblens', 'romanel-sur-morges', 'aclens', 'vullierens', 'gollion', 'vufflens-la-ville', 'bussigny', 'ecublens', 'saint-sulpice', 'chavannes-près-renens', 'renens', 'crissier', 'villars-sainte-croix', 'mex', 'sullens', 'cheseaux-sur-lausanne', 'lausanne', 'jouxtens-mézery', 'romanel-sur-lausanne', 'morrens', 'cugy', 'le mont-sur-lausanne', 'epalinges', 'belmont-sur-lausanne', 'pully', 'paudex', 'lutry', 'bourg-en-lavaux', 'bretigny-sur-morrens', 'etagnières', 'assens', 'echallens', 'bottens', 'montilliez', 'poliez-pittet', 'froideville', 'jorat-menthue', 'corcelles-le-jorat', 'ropraz', 'hermenches', 'vucherens', 'vulliens', 'syens', 'boulens', 'montanaire', 'moudon', 'rossenges', 'chavannes-sur-moudon', 'lucens', 'bussy-sur-moudon', 'curtilles', 'villars-le-comte', 'lovatens', 'prévonloup', 'dompierre', 'valbroye', 'henniez', 'villarzel', 'ogens', 'bercher', 'rueyres', 'pailly', 'vuarrens', 'penthéréaz', 'goumoëns', 'goumoens', 'goumoens-la-ville', 'oulens-sous-echallens', 'saint-barthélemy', 'villars-le-terroir', 'fey', 'daillens', 'lussery-villars', 'dizy', 'chevilly', 'moiry', 'la praz', 'mont-la-ville', "l'isle", 'montricher', 'mauraz', 'chavannes-le-veyron', 'grancy',
+                        // Communes précédemment dans le Centre à l'intérieur du périmètre
+                        'boussens', 'bournens', 'cully', 'epesses', 'grandvaux', 'riex', 'villette', 'oron', 'servion', 'mézières', 'jorat-mézières', 'montpreveyres', 'denges', 'echandens', 'lully', 'tolochenaz'
+                    ];
+
+                    if (distLower === 'lausanne' || distLower === 'ouest lausannois') {
+                        sector = 'CGM Centre (Blécherette)';
+                    } else if (globalCentreCommunes.some(x => cNorm === x || cNorm.includes(x))) {
+                        sector = 'CGM Centre (Blécherette)';
+                    } else if (distLower === 'aigle' || distLower.includes("riviera-pays")) {
                         sector = 'CGM Est (Rennaz)';
                     } else if (distLower === 'nyon') {
                         sector = 'CGM Ouest (Bursins)';
-                    } else if (distLower === 'lausanne' || distLower === 'ouest lausannois') {
-                        sector = 'CGM Centre (Blécherette)';
-                    } else if (distLower === 'gros-de-vaud') {
-                        const centreCommunes = ['mex', 'sullens', 'morrens', 'cugy', 'bretigny-sur-morrens', 'etagnières', 'assens', 'echallens', 'bottens', 'montilliez', 'poliez-pittet', 'jorat-menthue', 'boussens', 'bournens', 'froideville'];
-                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Nord (Yverdon)';
-                    } else if (distLower === 'jura-nord vaudois') {
+                    } else if (distLower === 'gros-de-vaud' || distLower === 'jura-nord vaudois' || distLower === 'broye-vully') {
                         sector = 'CGM Nord (Yverdon)';
-                    } else if (distLower === 'broye-vully') {
-                        const centreCommunes = ['vulliens', 'corcelles-le-jorat', 'ropraz', 'hermenches', 'rossenges', 'syens', 'moudon', 'bussy-sur-moudon', 'lucens', 'valbroye', 'vucherens'];
-                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Nord (Yverdon)';
                     } else if (distLower === 'lavaux-oron') {
-                        const centreCommunes = ['pully', 'paudex', 'belmont', 'belmont-sur-lausanne', 'lutry', 'bourg-en-lavaux', 'cully', 'epesses', 'grandvaux', 'riex', 'villette', 'oron', 'servion', 'mézières', 'jorat-mézières', 'montpreveyres'];
-                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Est (Rennaz)';
+                        sector = 'CGM Est (Rennaz)';
                     } else if (distLower === 'morges') {
-                        const centreCommunes = ['morges', 'chigny', 'vufflens-le-château', 'vaux-sur-morges', 'clarmont', 'echichens', 'préverenges', 'lonay', 'bremblens', 'romanel-sur-morges', 'aclens', 'vullierens', 'gollion', 'vufflens-la-ville', 'denges', 'echandens', 'lully', 'tolochenaz'];
-                        sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Ouest (Bursins)';
+                        sector = 'CGM Ouest (Bursins)';
                     } else {
                         sector = `CGM Non déterminé (${cleanDistrict})`;
                     }
@@ -535,11 +536,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Fetch District
             if (districtName && districtName !== 'Inconnu' && districtName !== '-') {
-                let dName = districtName.toLowerCase().includes('district') ? districtName : `District de ${districtName}`;
-                let urlDist = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(dName)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+                let dName = districtName;
+                if (!dName.toLowerCase().includes('district')) {
+                    if (dName === 'Gros-de-Vaud' || dName === 'Jura-Nord vaudois') {
+                        dName = `District du ${dName}`;
+                    } else if (dName === 'Broye-Vully' || dName === 'Riviera-Pays-d\'Enhaut') {
+                        dName = `District de la ${dName}`;
+                    } else if (dName === 'Ouest lausannois') {
+                        dName = `District de l'${dName}`;
+                    } else if (dName === 'Aigle' || dName === 'Oron') {
+                        dName = `District d'${dName}`;
+                    } else {
+                        dName = `District de ${dName}`;
+                    }
+                }
+
+                let urlDist = `https://nominatim.openstreetmap.org/search?county=${encodeURIComponent(dName)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
                 let resD = await fetch(urlDist, { headers: NOMINATIM_HEADERS });
                 if (resD.ok) {
                     let dataD = await resD.json();
+                    
+                    if (!dataD || dataD.length === 0) {
+                        urlDist = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(dName)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+                        resD = await fetch(urlDist, { headers: NOMINATIM_HEADERS });
+                        dataD = await resD.json();
+                    }
+
                     if (dataD && dataD.length > 0 && dataD[0].geojson && dataD[0].geojson.type !== "Point") {
                         L.geoJSON(dataD[0].geojson, {
                             style: {
@@ -842,9 +864,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const apiUrl = `https://geodesy.geo.admin.ch/reframe/lv95towgs84?easting=${coords.e}&northing=${coords.n}&format=json`;
                 const resp = await fetch(apiUrl);
                 const json = await resp.json();
-                // API returns: { easting: lng, northing: lat }
-                const lat = json.northing;
-                const lng = json.easting;
+                // API returns: { easting: "lng", northing: "lat" } as strings
+                const lat = parseFloat(json.northing);
+                const lng = parseFloat(json.easting);
                 subtitle.textContent = `LV95 : ${coords.orig} → GPS : ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
                 li.onclick = () => goToLocation(lat, lng, coords.orig);
             } catch (err) {
