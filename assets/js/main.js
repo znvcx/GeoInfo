@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let sheetState = 'expanded';
     let userMarker = null;
     let searchMarker = null;
-    let activeBoundaryLayer = null;
+    let boundaryGroup = L.layerGroup().addTo(map);
 
     // Nominatim headers per usage policy (User-Agent required)
     const NOMINATIM_HEADERS = {
@@ -268,10 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 infoLieudit.textContent = lieuDit;
 
                 // Effacer la surbrillance lors du changement de zone
-                if (activeBoundaryLayer) {
-                    map.removeLayer(activeBoundaryLayer);
-                    activeBoundaryLayer = null;
-                }
+                boundaryGroup.clearLayers();
 
                 if (canton === 'Vaud' && cardJustice) {
                     cardJustice.style.display = 'flex';
@@ -385,6 +382,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     locationSubtitle.style.color = "";
                 }
+
+                // Load boundaries automatically with a slight delay to respect API limits
+                if (dataEnabled) {
+                    loadBoundariesAutomatically(commune, cleanDistrict);
+                }
             } else {
                 locationTitle.textContent = "Lieu Inconnu";
                 locationSubtitle.textContent = "Point hors zones reconnues.";
@@ -493,92 +495,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-    async function loadBoundary(type, name, elementToLoadFrom) {
-        if (activeBoundaryLayer) {
-            map.removeLayer(activeBoundaryLayer);
-            activeBoundaryLayer = null;
-        }
+    async function loadBoundariesAutomatically(communeName, districtName) {
+        boundaryGroup.clearLayers();
 
-        if (!name || name === '-' || name.includes('Inconnu')) {
-            showToast("Nom invalide ou inconnu.");
-            return;
-        }
+        if (!communeName || communeName === 'Inconnue' || communeName === '-') return;
 
         try {
-            let url = '';
-            showToast("Recherche des limites...");
+            // Wait 1.5s before fetching to avoid rate-limit immediately after reverse geocoding
+            await new Promise(r => setTimeout(r, 1500));
 
-            if (type === 'commune') {
-                url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(name)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
-            } else if (type === 'district') {
-                // Pour sécuriser, on ajoute "District de " si manquant
-                let dName = name.toLowerCase().includes('district') ? name : `District de ${name}`;
-                url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(dName)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
-            } else if (type === 'canton') {
-                let cName = name.toLowerCase().includes('canton') ? name : `Canton de ${name}`;
-                url = `https://nominatim.openstreetmap.org/search?state=${encodeURIComponent(cName)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
-            } else {
-                // justice, lieudit
-                url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)},Switzerland&polygon_geojson=1&format=jsonv2&limit=1`;
+            // Fetch Commune
+            let urlCommune = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(communeName)}&country=Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+            let resC = await fetch(urlCommune, { headers: NOMINATIM_HEADERS });
+            if (!resC.ok) throw new Error("Commune boundary error");
+            let dataC = await resC.json();
+
+            if (!dataC || dataC.length === 0 || !dataC[0].geojson) {
+                await new Promise(r => setTimeout(r, 1000));
+                urlCommune = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(communeName)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+                resC = await fetch(urlCommune, { headers: NOMINATIM_HEADERS });
+                dataC = await resC.json();
             }
 
-            let response = await fetch(url);
-            let data = await response.json();
-
-            // Fallback for commune if nothing found
-            if (type === 'commune' && (!data || data.length === 0 || !data[0].geojson)) {
-                const url2 = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
-                response = await fetch(url2);
-                data = await response.json();
-            }
-
-            if (data && data.length > 0 && data[0].geojson) {
-                const geojson = data[0].geojson;
-                if (geojson.type === "Point") {
-                    showToast("Seul un point a été trouvé, pas de limites.");
-                    return;
-                }
-
-                let color = "#3b82f6";
-                if (type === 'canton') color = "#10b981";
-                if (type === 'district') color = "#f59e0b";
-                if (type === 'justice') color = "#8b5cf6";
-
-                activeBoundaryLayer = L.geoJSON(geojson, {
+            if (dataC && dataC.length > 0 && dataC[0].geojson && dataC[0].geojson.type !== "Point") {
+                L.geoJSON(dataC[0].geojson, {
                     style: {
-                        color: color,
-                        weight: 3,
-                        opacity: 0.8,
-                        fillOpacity: 0.15
+                        color: "#3b82f6", // Subtle blue for commune
+                        weight: 2,
+                        opacity: 0.7,
+                        fillOpacity: 0.05,
+                        dashArray: '5, 5'
                     },
                     interactive: false
-                }).addTo(map);
-
-                // Fit bounds to polygon (removed to prevent map moving and limit vanishing)
-                // Keep data sheet open!
-            } else {
-                showToast("Limites non disponibles pour cet élément.");
+                }).addTo(boundaryGroup);
             }
+
+            // Wait 1.5s before fetching district
+            await new Promise(r => setTimeout(r, 1500));
+
+            // Fetch District
+            if (districtName && districtName !== 'Inconnu' && districtName !== '-') {
+                let dName = districtName.toLowerCase().includes('district') ? districtName : `District de ${districtName}`;
+                let urlDist = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(dName)},Switzerland&polygon_geojson=1&format=jsonv2&class=boundary&type=administrative&limit=1`;
+                let resD = await fetch(urlDist, { headers: NOMINATIM_HEADERS });
+                if (resD.ok) {
+                    let dataD = await resD.json();
+                    if (dataD && dataD.length > 0 && dataD[0].geojson && dataD[0].geojson.type !== "Point") {
+                        L.geoJSON(dataD[0].geojson, {
+                            style: {
+                                color: "#f59e0b", // Subtle orange for district
+                                weight: 3,
+                                opacity: 0.6,
+                                fillOpacity: 0.0,
+                                dashArray: '10, 10'
+                            },
+                            interactive: false
+                        }).addTo(boundaryGroup);
+                    }
+                }
+            }
+
         } catch (e) {
-            console.error("Erreur chargement frontière", e);
-            showToast("Erreur lors du chargement des limites.");
+            console.warn("Could not load automatic boundaries", e);
         }
     }
-
-    // Attach Boundary Events
-    document.querySelectorAll('.btn-boundary').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation(); // Avoid triggering copy
-            const type = btn.getAttribute('data-type');
-
-            // commune, district, canton
-            const targetEl = document.getElementById(`info-${type}`);
-            if (targetEl && !targetEl.classList.contains('skeleton')) {
-                const name = targetEl.textContent.trim();
-                loadBoundary(type, name, btn);
-            }
-        });
-    });
 
     // Initial load geocoding: locate user
     if (dataEnabled) {
