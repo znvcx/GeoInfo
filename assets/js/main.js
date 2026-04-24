@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const urlParams = new URLSearchParams(window.location.search);
     const IS_MAX_INFO = urlParams.get('info') === 'max';
-    
+
     // Show hidden elements if debug/max mode
     if (IS_MAX_INFO) {
         const item = document.getElementById('layer-item-patrouille');
@@ -184,8 +184,26 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data && !data.error && data.address) {
                 const addr = data.address;
 
-                const commune = addr.village || addr.town || addr.city || addr.municipality || 'Inconnue';
-                const district = addr.county || addr.district || 'Inconnu';
+                let districtRaw = addr.county || addr.district || 'Inconnu';
+                let commune = 'Inconnue';
+                
+                // Fix for localities (like St-Triphon): extract actual municipality from display_name
+                if (data.display_name && districtRaw !== 'Inconnu') {
+                    const parts = data.display_name.split(',').map(p => p.trim());
+                    const idx = parts.indexOf(districtRaw);
+                    if (idx > 0) {
+                        commune = parts[idx - 1];
+                    }
+                }
+                
+                if (commune === 'Inconnue') {
+                    commune = addr.municipality || addr.city || addr.town || addr.village || 'Inconnue';
+                }
+
+                // Remove " VD" suffix from commune names for cleaner display
+                commune = commune.replace(/\s+VD$/i, '').trim();
+
+                const district = districtRaw;
                 const canton = addr.state || 'Inconnu';
 
                 let displayName = data.name || commune;
@@ -204,9 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 infoCommune.textContent = commune;
                 // Normalize district name - Nominatim can return "District de X" or "District d'X" etc.
                 const cleanDistrict = district
-                    .replace(/^District\s+d[eu]'?\s*/i, '')
-                    .replace(/^District\s+de\s+l[ae]?'?\s*/i, '')
-                    .replace(/^District\s+des?\s+/i, '')
+                    .replace(/^District\s+(d['’]|de\s+la\s+|des?\s+|du\s+)/i, '')
                     .trim();
                 infoDistrict.textContent = cleanDistrict;
                 infoCanton.textContent = canton;
@@ -295,28 +311,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     cardJustice.style.display = 'none';
                 }
 
+                let cNorm = commune.toLowerCase().replace(/^(commune de|ville de)\s+/i, '').replace(/\s+vd$/i, '').trim();
+
                 // Police assignment
                 if (canton === 'Vaud' && cardPolice) {
                     cardPolice.style.display = 'flex';
-                    const c = commune.toLowerCase();
 
-                    if (c.includes("lausanne") && !c.includes("belmont") && !c.includes("mont-sur")) {
+                    if (['lausanne'].some(x => cNorm === x)) {
                         infoPolice.textContent = "Police de Lausanne";
-                    } else if (c.includes("bussigny") || c.includes("chavannes-près-renens") || c.includes("crissier") || c.includes("ecublens") || c.includes("prilly") || c.includes("renens") || c.includes("saint-sulpice") || c.includes("villars-sainte-croix")) {
+                    } else if (['bussigny', 'chavannes-près-renens', 'crissier', 'ecublens', 'prilly', 'renens', 'saint-sulpice', 'villars-sainte-croix'].some(x => cNorm === x)) {
                         infoPolice.textContent = "Police Ouest Lausannois (POL)";
-                    } else if (c.includes("morges") || c.includes("buchillon") || c.includes("lussy") || c.includes("préverenges") || c.includes("saint-prex") || c.includes("tolochenaz")) {
+                    } else if (['morges', 'buchillon', 'lussy-sur-morges', 'préverenges', 'saint-prex', 'tolochenaz'].some(x => cNorm === x)) {
                         infoPolice.textContent = "Police Région Morges (PRM)";
-                    } else if (c.includes("nyon") || c.includes("prangins") || c.includes("crans")) {
+                    } else if (['nyon', 'prangins', 'crans', 'crans-près-céligny'].some(x => cNorm === x)) {
                         infoPolice.textContent = "Police Nyon Région (PNR)";
-                    } else if (c.includes("yverdon") || c.includes("chamblon") || c.includes("cheseaux-noréaz") || c.includes("grandson") || c.includes("montagny") || c.includes("cuarny") || c.includes("treycovagnes") || c.includes("pomy") || c.includes("valeyres")) {
+                    } else if (['yverdon-les-bains', 'yverdon', 'chamblon', 'cheseaux-noréaz', 'ependes', 'mathod', 'pomy', 'suchy', 'suscévaz', 'treycovagnes'].some(x => cNorm === x)) {
                         infoPolice.textContent = "Police Nord Vaudois (PNV)";
-                    } else if (c.includes("montreux") || c.includes("vevey") || c.includes("tour-de-peilz") || c.includes("blonay") || c.includes("légier") || c.includes("chardonne") || c.includes("corseaux") || c.includes("corsier") || c.includes("jongny") || c.includes("veytaux")) {
-                        infoPolice.textContent = "Police Riviera (ASR)";
-                    } else if (c.includes("aigle") || c.includes("bex") || c.includes("ollon")) {
-                        infoPolice.textContent = "Police du Chablais vaudois (EPOC)";
-                    } else if (c.includes("pully") || c.includes("paudex") || c.includes("belmont") || c.includes("savigny")) {
+                    } else if (['blonay', 'saint-légier', 'blonay - saint-légier', 'chardonne', 'corseaux', 'corsier', 'corsier-sur-vevey', 'jongny', 'montreux', 'la tour-de-peilz', 'tour-de-peilz', 'vevey', 'veytaux'].some(x => cNorm === x)) {
+                        infoPolice.textContent = "Police ASR Riviera";
+                    } else if (['aigle', 'bex', 'ollon'].some(x => cNorm === x)) {
+                        infoPolice.textContent = "Police EPOC";
+                    } else if (['pully', 'paudex', 'belmont', 'belmont-sur-lausanne'].some(x => cNorm === x)) {
                         infoPolice.textContent = "Police Est Lausannois (PEL)";
-                    } else if (c.includes("bourg-en-lavaux") || c.includes("chexbres") || c.includes("lutry") || c.includes("puidoux") || c.includes("rivaz") || c.includes("saint-saphorin")) {
+                    } else if (['bourg-en-lavaux', 'chexbres', 'lutry', 'puidoux', 'rivaz', 'saint-saphorin', 'saint-saphorin (lavaux)'].some(x => cNorm === x)) {
                         infoPolice.textContent = "Police Lavaux (APOL)";
                     } else {
                         infoPolice.textContent = "Gendarmerie vaudoise";
@@ -331,36 +348,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     cardPatrouille.style.setProperty('display', 'flex', 'important');
                     
                     let sector = "";
-                    const c = commune.toLowerCase();
-                    const cNorm = c.replace(/^(commune de|ville de)\s+/i, '').trim();
+                    const distLower = cleanDistrict.toLowerCase();
 
-                    if (cleanDistrict === 'Aigle' || cleanDistrict === "Riviera-Pays-d'Enhaut") {
+                    if (distLower === 'aigle' || distLower.includes("riviera-pays")) {
                         sector = 'CGM Est (Rennaz)';
-                    } else if (cleanDistrict === 'Nyon') {
+                    } else if (distLower === 'nyon') {
                         sector = 'CGM Ouest (Bursins)';
-                    } else if (cleanDistrict === 'Lausanne' || cleanDistrict === 'Ouest lausannois' || cleanDistrict === 'Gros-de-Vaud') {
+                    } else if (distLower === 'lausanne' || distLower === 'ouest lausannois') {
                         sector = 'CGM Centre (Blécherette)';
-                    } else if (cleanDistrict === 'Jura-Nord vaudois') {
-                        const centreCommunes = ['villars-le-terroir', 'vuarrens', 'bercher', 'pailly', 'essertines', 'fey', 'oppens', 'oulens'];
+                    } else if (distLower === 'gros-de-vaud') {
+                        const centreCommunes = ['mex', 'sullens', 'morrens', 'cugy', 'bretigny-sur-morrens', 'etagnières', 'assens', 'echallens', 'bottens', 'montilliez', 'poliez-pittet', 'jorat-menthue', 'boussens', 'bournens', 'froideville'];
                         sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Nord (Yverdon)';
-                    } else if (cleanDistrict === 'Broye-Vully') {
-                        const centreCommunes = [
-                            'moudon', 'lucens', 'valbroye', 'vucherens', 'syens', 'rossenges', 'hermenches', 'vulliens', 
-                            'bussy-sur-moudon', 'chavannes-sur-moudon', 'chesalles-sur-moudon', 'curtilles', 'dompierre', 
-                            'lovatens', 'prévonloup', 'roche-sur-mane', 'sarzens', 'treytorrens', 'villars-le-comte', 
-                            'brenles', 'forel-sur-lucens', 'cremin', 'granges-près-marnand'
-                        ];
+                    } else if (distLower === 'jura-nord vaudois') {
+                        sector = 'CGM Nord (Yverdon)';
+                    } else if (distLower === 'broye-vully') {
+                        const centreCommunes = ['vulliens', 'corcelles-le-jorat', 'ropraz', 'hermenches', 'rossenges', 'syens', 'moudon', 'bussy-sur-moudon', 'lucens', 'valbroye', 'vucherens'];
                         sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Nord (Yverdon)';
-                    } else if (cleanDistrict === 'Lavaux-Oron') {
-                        const centreCommunes = ['pully', 'paudex', 'belmont', 'lutry', 'savigny', 'bourg-en-lavaux', 'cully', 'epesses', 'grandvaux', 'riex', 'villette', 'forel', 'servion', 'ferlens', 'mézières', 'carrouge', 'montpreveyres'];
+                    } else if (distLower === 'lavaux-oron') {
+                        const centreCommunes = ['pully', 'paudex', 'belmont', 'belmont-sur-lausanne', 'lutry', 'bourg-en-lavaux', 'cully', 'epesses', 'grandvaux', 'riex', 'villette', 'oron', 'servion', 'mézières', 'jorat-mézières', 'montpreveyres'];
                         sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Est (Rennaz)';
-                    } else if (cleanDistrict === 'Morges') {
-                        const centreCommunes = [
-                            'morges', 'echichens', 'colombier', 'gollion', 'montricher', "l'isle", 'cossonay', 
-                            'vullierens', 'aclens', 'romanel', 'senarclens', 'la chaux', 'cuarnens', 'mont-la-ville', 'la praz',
-                            'dizy', 'chevilly', 'pampigny', 'cottens', 'sévery', 'apples', 'reverolle', 'bussy', 'grancy', 'chavannes-le-veyron',
-                            'mauraz', 'ferreyres', 'moiry', 'bremblens', 'lonay', 'préverenges', 'denges', 'echandens'
-                        ];
+                    } else if (distLower === 'morges') {
+                        const centreCommunes = ['morges', 'chigny', 'vufflens-le-château', 'vaux-sur-morges', 'clarmont', 'echichens', 'préverenges', 'lonay', 'bremblens', 'romanel-sur-morges', 'aclens', 'vullierens', 'gollion', 'vufflens-la-ville', 'denges', 'echandens', 'lully', 'tolochenaz'];
                         sector = centreCommunes.some(x => cNorm.includes(x)) ? 'CGM Centre (Blécherette)' : 'CGM Ouest (Bursins)';
                     } else {
                         sector = `CGM Non déterminé (${cleanDistrict})`;
